@@ -1,7 +1,7 @@
 import numpy as np
 import cv2
 
-overlay_image = cv2.imread('hd.jpg')
+overlay_image = cv2.imread('overlay.jpg')
 
 
 def findArucoMarkers(image, markerSize=6, totalMarkers=250):
@@ -9,52 +9,54 @@ def findArucoMarkers(image, markerSize=6, totalMarkers=250):
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
 
     # Get the Aruco dictionary based on the marker size and total markers
-    dictionary_key = getattr(cv2.aruco, f'DICT_{markerSize}X{markerSize}_{totalMarkers}')
+    dictionary_key = getattr(cv2.aruco, f'DICT_{markerSize}X'
+                                        f'{markerSize}_{totalMarkers}')
     aruco_dictionary = cv2.aruco.getPredefinedDictionary(dictionary_key)
 
     # Set the Aruco detector parameters
-    aruco_parameters = cv2.aruco.DetectorParameters()
+    aruco_params = cv2.aruco.DetectorParameters()
 
     # Detect Aruco markers in the grayscale image
-    marker_corners, marker_ids, _ = cv2.aruco.detectMarkers(gray, aruco_dictionary, parameters=aruco_parameters)
+    marker_corners, marker_ids, _ = cv2.aruco.detectMarkers(gray, aruco_dictionary,
+                                                            parameters=aruco_params)
 
     return marker_corners, marker_ids
 
-def superimposeImageOnMarkers(video_frame, aruco_markers, overlay_image, video_width, video_height):
-    # Get the height and width of the video frame
+def superimposeImageOnMarkers(video_frame, aruco_markers, overlay_image,
+                              video_width, video_height):
     frame_height, frame_width = video_frame.shape[:2]
 
-    # If Aruco markers are detected
     if len(aruco_markers[0]) != 0:
         for i, marker_corner in enumerate(aruco_markers[0]):
-            # Reshape the marker corners and convert them to int
             marker_corners = marker_corner.reshape((4, 2)).astype(np.int32)
 
             # Draw a polygon around the marker corners
             cv2.polylines(video_frame, [marker_corners], True, (0, 255, 0), 2)
 
             # Add marker ID as text on the top-left corner of the marker
-            cv2.putText(video_frame, str(aruco_markers[1][i]), tuple(marker_corners[0]), cv2.FONT_HERSHEY_SIMPLEX,
-                        0.5, (0, 255, 0), 2)
+            cv2.putText(video_frame, str(aruco_markers[1][i]),
+                        tuple(marker_corners[0]),
+                        cv2.FONT_HERSHEY_SIMPLEX,0.5, (0, 255, 0), 2)
 
             # Find the homography matrix to map the overlay image onto the marker
             homography_matrix, _ = cv2.findHomography(
-                np.array([[0, 0], [video_width, 0], [video_width, video_height], [0, video_height]], dtype="float32"),
-                marker_corners
-            )
+                np.array([[0, 0], [video_width, 0], [video_width, video_height],
+                          [0, video_height]], dtype="float32"),marker_corners)
 
-            # Warp the overlay image to align with the marker using the homography matrix
-            warped_image = cv2.warpPerspective(overlay_image, homography_matrix, (frame_width, frame_height))
+            # Warp the overlay image to align with the marker using homography matrix
+            warped_image = cv2.warpPerspective(overlay_image, homography_matrix,
+                                               (frame_width, frame_height))
 
             # Create a mask to apply the warped image only on the marker area
             mask = np.zeros((frame_height, frame_width), dtype="uint8")
             cv2.fillConvexPoly(mask, marker_corners, (255, 255, 255), cv2.LINE_AA)
 
-            # Apply the mask to the warped image
-            masked_warped_image = cv2.bitwise_and(warped_image, warped_image, mask=mask)
+            masked_warped_image = cv2.bitwise_and(warped_image, warped_image,
+                                                  mask=mask)
 
             # Apply the inverse mask to the video frame
-            masked_video_frame = cv2.bitwise_and(video_frame, video_frame, mask=cv2.bitwise_not(mask))
+            masked_video_frame = cv2.bitwise_and(video_frame, video_frame,
+                                                 mask=cv2.bitwise_not(mask))
 
             # Combine the masked warped image and masked video frame
             video_frame = cv2.add(masked_warped_image, masked_video_frame)
@@ -81,7 +83,8 @@ def processVideoFeed(overlay_image):
             aruco_markers = findArucoMarkers(video_frame, totalMarkers=100)
 
             # Superimpose the overlay image on the markers in the video frame
-            video_frame = superimposeImageOnMarkers(video_frame, aruco_markers, overlay_image, video_width,
+            video_frame = superimposeImageOnMarkers(video_frame, aruco_markers,
+                                                    overlay_image, video_width,
                                                     video_height)
 
             # Display the video frame with overlay
